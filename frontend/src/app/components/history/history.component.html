@@ -1,0 +1,63 @@
+<div class="history-page">
+  <div class="page-hero">
+    <div class="hero-left">
+      <div class="hero-icon-wrap">
+        <mat-icon>history</mat-icon>
+      </div>
+      <div>
+        <h1>Execution History</h1>
+        <p class="subtitle">Browse all past kubectl command executions and outputs</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-wrapper">
+    <table mat-table [dataSource]="executions()" class="premium-table">
+      <ng-container matColumnDef="id">
+        <th mat-header-cell *matHeaderCellDef>#</th>
+        <td mat-cell *matCellDef="let e">
+          <span class="id-cell">{{ e.id }}</span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="commandName">
+        <th mat-header-cell *matHeaderCellDef>Command</th>
+        <td mat-cell *matCellDef="let e">
+          <span class="cmd-cell">{{ e.commandName }}</span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="fullCommand">
+        <th mat-header-cell *matHeaderCellDef>Full Command</th>
+        <td mat-cell *matCellDef="let e"><code class="mono-cell">{{ e.fullCommand }}</code></td>
+      </ng-container>
+
+      <ng-container matColumnDef="status">
+        <th mat-header-cell *matHeaderCellDef>Status</th>
+        <td mat-cell *matCellDef="let e">
+          <span class="status-pill" [class.success]="e.status === 'SUCCESS'" [class.failed]="e.status === 'FAILED'">
+            <mat-icon>{{ e.status === 'SUCCESS' ? 'check_circle' : 'error' }}</mat-icon>
+            {{ e.status }}
+          </span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="executedAt">
+        <th mat-header-cell *matHeaderCellDef>Executed At</th>
+        <td mat-cell *matCellDef="let e" class="time-cell">{{ e.executedAt }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef>Output</th>
+        <td mat-cell *matCellDef="let e">
+          <button mat-icon-button class="view-btn" (click)="viewOutput(e)">
+            <mat-icon>visibility</mat-icon>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+    </table>
+  </div>
+</div>

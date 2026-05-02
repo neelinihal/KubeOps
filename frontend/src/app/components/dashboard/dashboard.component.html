@@ -1,0 +1,294 @@
+<div class="dashboard">
+  <!-- Premium Header -->
+  <div class="page-hero">
+    <div class="hero-left">
+      <div class="hero-icon-wrap">
+        <mat-icon>terminal</mat-icon>
+      </div>
+      <div>
+        <h1>Kube<span class="logo-accent">Ops</span> Command Center</h1>
+        <p class="subtitle">Execute and manage kubectl commands</p>
+      </div>
+    </div>
+
+    <div class="hero-right">
+      <div class="cluster-badge" [class.disconnected]="!clusterConnected">
+        <div class="cluster-live-dot" [class.off]="!clusterConnected"></div>
+        <div class="cluster-detail">
+          <span class="cluster-label">Cluster</span>
+          <span class="cluster-val">{{ clusterName || 'Loading...' }}</span>
+        </div>
+        <div class="cluster-sep"></div>
+        <div class="cluster-detail">
+          <span class="cluster-label">Region</span>
+          <span class="cluster-val">{{ clusterRegion || '...' }}</span>
+        </div>
+        <div class="cluster-sep"></div>
+        <div class="cluster-detail">
+          <span class="cluster-label">Status</span>
+          @if (clusterConnected) {
+            <span class="cluster-val live"><span class="live-pulse"></span>Live</span>
+          } @else {
+            <span class="cluster-val off">Offline</span>
+          }
+        </div>
+        <div class="cluster-sep"></div>
+        <div class="cluster-detail">
+          <mat-icon class="clock-icon">schedule</mat-icon>
+          <span class="cluster-val">{{ currentTime }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toolbar: Namespace + Search -->
+  <div class="toolbar-strip">
+    <div class="toolbar-left">
+      <div class="ns-picker" (click)="toggleNsDropdown()" [class.open]="nsDropdownOpen">
+        <mat-icon class="ns-pick-icon">folder_copy</mat-icon>
+        <span class="ns-pick-label">Namespace:</span>
+        <span class="ns-pick-value">{{ selectedNamespace || 'All Namespaces' }}</span>
+        <mat-icon class="ns-pick-arrow">expand_more</mat-icon>
+      </div>
+      @if (nsDropdownOpen) {
+        <div class="ns-pick-backdrop" (click)="closeNsDropdown()"></div>
+        <div class="ns-pick-dropdown">
+          <div class="ns-pick-item" [class.active]="!selectedNamespace" (click)="selectNamespace('')">
+            <mat-icon>layers</mat-icon>
+            <span>All Namespaces</span>
+            @if (!selectedNamespace) { <mat-icon class="ns-pick-check">check</mat-icon> }
+          </div>
+          <div class="ns-pick-divider"></div>
+          @for (ns of namespaces; track ns) {
+            <div class="ns-pick-item" [class.active]="selectedNamespace === ns" (click)="selectNamespace(ns)">
+              <mat-icon>folder</mat-icon>
+              <span>{{ ns }}</span>
+              @if (selectedNamespace === ns) { <mat-icon class="ns-pick-check">check</mat-icon> }
+            </div>
+          }
+        </div>
+      }
+    </div>
+    <button class="terminal-shortcut-btn" (click)="scrollToTerminal()">
+      <mat-icon>terminal</mat-icon>
+      <span>Custom Command</span>
+    </button>
+  </div>
+
+  <!-- Command Categories -->
+  @for (category of getCategories(); track category.name) {
+    <div class="category-section">
+      <div class="category-header">
+        <div class="category-icon-wrap">
+          <mat-icon>{{ category.icon }}</mat-icon>
+        </div>
+        <span class="category-name">{{ category.name }}</span>
+        <span class="category-count">{{ category.commands.length }}</span>
+        <div class="category-line"></div>
+      </div>
+      <div class="command-grid">
+        @for (cmd of category.commands; track cmd.key; let i = $index) {
+          <div class="command-card" (click)="runCommand(cmd)" [style.animation-delay]="i * 60 + 'ms'">
+            <div class="card-glow"></div>
+            <div class="card-stripe"></div>
+            <div class="card-content">
+              <div class="card-top">
+                <div class="icon-container">
+                  <mat-icon>{{ getIcon(cmd.key) }}</mat-icon>
+                </div>
+                <div class="card-meta">
+                  <span class="card-title">{{ formatLabel(cmd.key) }}</span>
+                  <code class="card-cmd">{{ cmd.template }}</code>
+                </div>
+              </div>
+              <div class="card-bottom">
+                @if (cmd.parameters.length > 0) {
+                  <div class="param-tags">
+                    @for (p of cmd.parameters; track p) {
+                      <span class="param-tag">
+                        <mat-icon>input</mat-icon>{{ p }}
+                      </span>
+                    }
+                  </div>
+                } @else {
+                  <span class="instant-badge">
+                    <mat-icon>bolt</mat-icon> Instant
+                  </span>
+                }
+                <div class="run-btn">
+                  <mat-icon>play_arrow</mat-icon>
+                  <span>Run</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Manual Command Terminal -->
+  <div class="category-section">
+    <div class="category-header">
+      <div class="category-icon-wrap">
+        <mat-icon>terminal</mat-icon>
+      </div>
+      <span class="category-name">Custom Command</span>
+      <div class="category-line"></div>
+    </div>
+    <div class="custom-terminal" #customTerminal>
+      <div class="custom-terminal-header">
+        <div class="custom-terminal-dots"><span></span><span></span><span></span></div>
+        <span class="custom-terminal-title">
+          <mat-icon>code</mat-icon>
+          kubectl Terminal
+        </span>
+        <span class="custom-terminal-hint">Run any read-only kubectl command</span>
+      </div>
+      <div class="custom-terminal-body">
+        <div class="custom-input-row">
+          <span class="custom-prompt">$</span>
+          <input
+            type="text"
+            class="custom-input"
+            placeholder="kubectl get pods -n default"
+            [(ngModel)]="customCommand"
+            (keydown.enter)="runCustomCommand()"
+            [disabled]="customLoading"
+          />
+          <button class="custom-run-btn" (click)="runCustomCommand()" [disabled]="customLoading || !customCommand.trim()">
+            @if (customLoading) {
+              <mat-spinner diameter="18"></mat-spinner>
+            } @else {
+              <mat-icon>play_arrow</mat-icon>
+            }
+            @if (customLoading) {
+              {{ customElapsed }}s
+            } @else {
+              Run
+            }
+          </button>
+        </div>
+        <div class="custom-help-row">
+          <span class="custom-help-tag" (click)="customCommand = 'kubectl get pods -A'">get pods</span>
+          <span class="custom-help-tag" (click)="customCommand = 'kubectl get svc -A'">get services</span>
+          <span class="custom-help-tag" (click)="customCommand = 'kubectl get nodes'">get nodes</span>
+          <span class="custom-help-tag" (click)="customCommand = 'kubectl top pods -A'">top pods</span>
+          <span class="custom-help-tag" (click)="customCommand = 'kubectl get events -A --sort-by=.lastTimestamp'">events</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Minimized pill in bottom-right corner -->
+  @if ((result() || loading()) && consoleOpen && consoleMinimized) {
+    <div class="console-pill" (click)="toggleConsole()">
+      @if (loading()) {
+        <mat-spinner diameter="16" class="pill-spinner"></mat-spinner>
+        <span>Executing...</span>
+      } @else if (result(); as r) {
+        <mat-icon class="pill-icon" [class.s]="r.status === 'SUCCESS'" [class.f]="r.status === 'FAILED'">
+          {{ r.status === 'SUCCESS' ? 'check_circle' : 'error' }}
+        </mat-icon>
+        <span>{{ formatLabel(r.commandName) }}</span>
+        <span class="pill-badge" [class.s]="r.status === 'SUCCESS'" [class.f]="r.status === 'FAILED'">{{ r.status }}</span>
+      }
+      <mat-icon class="pill-expand">open_in_full</mat-icon>
+      <button class="pill-close" (click)="closeConsole(); $event.stopPropagation()">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  }
+
+  <!-- Centered floating console modal -->
+  @if ((result() || loading()) && consoleOpen && !consoleMinimized) {
+    <div class="console-backdrop" (click)="toggleConsole()"></div>
+    <div class="console-modal" #consoleModal>
+      <div class="resize-handle n" (mousedown)="onResizeStart($event, 'n')"></div>
+      <div class="resize-handle s" (mousedown)="onResizeStart($event, 's')"></div>
+      <div class="resize-handle e" (mousedown)="onResizeStart($event, 'e')"></div>
+      <div class="resize-handle w" (mousedown)="onResizeStart($event, 'w')"></div>
+      <div class="resize-handle ne" (mousedown)="onResizeStart($event, 'ne')"></div>
+      <div class="resize-handle nw" (mousedown)="onResizeStart($event, 'nw')"></div>
+      <div class="resize-handle se" (mousedown)="onResizeStart($event, 'se')"></div>
+      <div class="resize-handle sw" (mousedown)="onResizeStart($event, 'sw')"></div>
+      <div class="console-panel" [class.success]="result()?.status === 'SUCCESS'" [class.failed]="result()?.status === 'FAILED'">
+        <div class="console-titlebar">
+          <div class="console-titlebar-left">
+            <mat-icon class="terminal-icon">terminal</mat-icon>
+            @if (loading()) {
+              <mat-spinner diameter="14" class="console-spinner"></mat-spinner>
+              <span class="console-title">Executing...</span>
+            } @else if (result(); as r) {
+              <span class="console-title">{{ formatLabel(r.commandName) }}</span>
+              <span class="console-badge" [class.s]="r.status === 'SUCCESS'" [class.f]="r.status === 'FAILED'">
+                <mat-icon class="badge-icon">{{ r.status === 'SUCCESS' ? 'check_circle' : 'error' }}</mat-icon>
+                {{ r.status }}
+              </span>
+            }
+          </div>
+          @if (result()) {
+            <code class="console-cmd">$ {{ result()!.fullCommand }}</code>
+          }
+          <div class="console-window-controls">
+            <button class="wc-btn minimize" (click)="toggleConsole()" title="Minimize">
+              <mat-icon>remove</mat-icon>
+            </button>
+            <button class="wc-btn close" (click)="closeConsole()" title="Close">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+        </div>
+        @if (result(); as r) {
+          <div class="console-body-wrap">
+            <div class="console-toolbar">
+              <span class="console-time">{{ r.executedAt }}</span>
+              <div class="search-container">
+                <div class="search-slider" [class.open]="searchOpen">
+                  <div class="search-inner">
+                    <mat-icon class="search-icon-label">search</mat-icon>
+                    <input
+                      #searchInput
+                      [(ngModel)]="searchTerm"
+                      (ngModelChange)="onSearch()"
+                      (keydown.enter)="navigateNext()"
+                      (keydown.escape)="closeSearch()"
+                      placeholder="Find in output..."
+                      class="search-input"
+                    />
+                    @if (searchOpen && searchTerm) {
+                      <span class="match-info">
+                        @if (totalMatches > 0) {
+                          <span class="match-count">{{ currentMatch }}<span class="match-sep">/</span>{{ totalMatches }}</span>
+                        } @else {
+                          <span class="no-match">No results</span>
+                        }
+                      </span>
+                    }
+                    <div class="search-actions">
+                      <button class="search-nav-btn" (click)="navigatePrev()" [disabled]="totalMatches === 0">
+                        <mat-icon>expand_less</mat-icon>
+                      </button>
+                      <button class="search-nav-btn" (click)="navigateNext()" [disabled]="totalMatches === 0">
+                        <mat-icon>expand_more</mat-icon>
+                      </button>
+                      <button class="search-nav-btn close-btn" (click)="closeSearch()">
+                        <mat-icon>close</mat-icon>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                @if (!searchOpen) {
+                  <button class="search-toggle-btn" (click)="openSearch()" title="Search (Ctrl+F)">
+                    <mat-icon>search</mat-icon>
+                  </button>
+                }
+              </div>
+            </div>
+            <pre class="terminal-body" #terminalBody [innerHTML]="highlightedOutput"></pre>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

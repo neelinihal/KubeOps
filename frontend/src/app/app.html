@@ -1,0 +1,44 @@
+<div class="app-shell">
+  <header class="navbar">
+    <div class="navbar-inner">
+      <div class="brand">
+        <div class="brand-logo">
+          <mat-icon>hub</mat-icon>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">EKS Ops Center</span>
+          <span class="brand-sub">Kubernetes Management Console</span>
+        </div>
+      </div>
+      <nav class="nav">
+        <a routerLink="/dashboard" routerLinkActive="active" class="nav-item" (click)="scrollToTop()">
+          <mat-icon>grid_view</mat-icon>
+          <span>Dashboard</span>
+        </a>
+        <a routerLink="/cluster-status" routerLinkActive="active" class="nav-item" (click)="scrollToTop()">
+          <mat-icon>monitor_heart</mat-icon>
+          <span>Cluster Status</span>
+        </a>
+        <a routerLink="/resource-usage" routerLinkActive="active" class="nav-item" (click)="scrollToTop()">
+          <mat-icon>monitoring</mat-icon>
+          <span>Resources</span>
+        </a>
+        <a routerLink="/events" routerLinkActive="active" class="nav-item" (click)="scrollToTop()">
+          <mat-icon>timeline</mat-icon>
+          <span>Events</span>
+        </a>
+        <a routerLink="/history" routerLinkActive="active" class="nav-item" (click)="scrollToTop()">
+          <mat-icon>schedule</mat-icon>
+          <span>History</span>
+        </a>
+      </nav>
+      <div class="nav-right">
+        <div class="status-dot"></div>
+        <span class="status-text">Cluster Connected</span>
+      </div>
+    </div>
+  </header>
+  <main class="main-content">
+    <router-outlet></router-outlet>
+  </main>
+</div>

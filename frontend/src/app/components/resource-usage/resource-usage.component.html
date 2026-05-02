@@ -1,0 +1,215 @@
+<div class="resource-usage">
+  <!-- Hero Header -->
+  <div class="page-hero">
+    <div class="hero-left">
+      <div class="hero-icon-wrap">
+        <mat-icon>monitoring</mat-icon>
+      </div>
+      <div>
+        <h1>Resource Monitor</h1>
+        <p class="subtitle">Real-time CPU & Memory utilization across your cluster</p>
+      </div>
+    </div>
+    <div class="hero-right">
+      @if (autoRefresh) {
+        <div class="live-pill">
+          <span class="live-dot"></span>
+          <span>AUTO-REFRESH</span>
+        </div>
+      }
+      <div class="refresh-info">
+        <mat-icon>update</mat-icon>
+        <span>{{ lastRefreshed }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="summary-row">
+    <div class="summary-card">
+      <div class="summary-icon cpu-icon">
+        <mat-icon>developer_board</mat-icon>
+      </div>
+      <div class="summary-data">
+        <span class="summary-value">{{ currentMetrics.length }}</span>
+        <span class="summary-label">{{ activeTab === 'pods' ? 'Pods' : 'Nodes' }} Monitored</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-icon mem-icon">
+        <mat-icon>memory</mat-icon>
+      </div>
+      <div class="summary-data">
+        <span class="summary-value">{{ avgCpu }}%</span>
+        <span class="summary-label">Avg CPU Usage</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-icon health-icon">
+        <mat-icon>favorite</mat-icon>
+      </div>
+      <div class="summary-data">
+        <span class="summary-value">{{ avgMemory }}%</span>
+        <span class="summary-label">Avg Memory Usage</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-icon alert-icon" [class.danger]="highUsageCount > 0">
+        <mat-icon>{{ highUsageCount > 0 ? 'warning' : 'verified' }}</mat-icon>
+      </div>
+      <div class="summary-data">
+        <span class="summary-value" [class.danger-text]="highUsageCount > 0">{{ highUsageCount }}</span>
+        <span class="summary-label">High Usage (>80%)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls-strip">
+    <div class="tab-switcher">
+      <button class="tab-pill" [class.active]="activeTab === 'pods'" (click)="switchTab('pods')">
+        <mat-icon>dns</mat-icon>
+        <span>Pods</span>
+        <span class="tab-count">{{ activeTab === 'pods' ? podMetrics.length : '' }}</span>
+      </button>
+      <button class="tab-pill" [class.active]="activeTab === 'nodes'" (click)="switchTab('nodes')">
+        <mat-icon>storage</mat-icon>
+        <span>Nodes</span>
+        <span class="tab-count">{{ activeTab === 'nodes' ? nodeMetrics.length : '' }}</span>
+      </button>
+    </div>
+
+    @if (activeTab === 'pods') {
+      <mat-form-field appearance="outline" class="ns-selector" subscriptSizing="dynamic">
+        <mat-label>Namespace</mat-label>
+        <mat-select [(ngModel)]="selectedNamespace" (selectionChange)="refresh()">
+          <mat-option value="">All Namespaces</mat-option>
+          @for (ns of namespaces; track ns) {
+            <mat-option [value]="ns">{{ ns }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    }
+
+    <div class="ctrl-buttons">
+      <button mat-icon-button matTooltip="Refresh now" (click)="refresh()" [disabled]="loading" class="action-btn">
+        <mat-icon [class.spinning]="loading">refresh</mat-icon>
+      </button>
+      <button mat-icon-button [matTooltip]="autoRefresh ? 'Stop auto-refresh' : 'Start auto-refresh'"
+              (click)="toggleAutoRefresh()" class="action-btn" [class.active]="autoRefresh">
+        <mat-icon>{{ autoRefresh ? 'pause_circle' : 'play_circle' }}</mat-icon>
+      </button>
+      <button class="interval-chip" [matMenuTriggerFor]="intervalMenu">
+        {{ refreshIntervalSec }}s
+        <mat-icon class="chip-arrow">expand_more</mat-icon>
+      </button>
+      <mat-menu #intervalMenu="matMenu" class="interval-menu">
+        @for (opt of [{v:5,l:'5s'},{v:10,l:'10s'},{v:30,l:'30s'},{v:60,l:'1m'},{v:120,l:'2m'}]; track opt.v) {
+          <button mat-menu-item (click)="onIntervalChange(opt.v)" [class.selected]="refreshIntervalSec === opt.v">
+            {{ opt.l }}
+          </button>
+        }
+      </mat-menu>
+    </div>
+  </div>
+
+  <!-- Last Updated -->
+  @if (lastRefreshed) {
+    <div class="last-updated">
+      <mat-icon>schedule</mat-icon>
+      Last updated: {{ lastRefreshed }}
+      @if (autoRefresh) {
+        <span class="auto-badge"><span class="pulse-dot"></span> Auto-refreshing every {{ refreshIntervalSec }}s</span>
+      }
+    </div>
+  }
+
+  <!-- Loading -->
+  @if (loading && currentMetrics.length === 0) {
+    <div class="loading-state">
+      <mat-spinner diameter="44"></mat-spinner>
+      <p>Fetching metrics from cluster...</p>
+    </div>
+  }
+
+  <!-- Empty -->
+  @if (!loading && currentMetrics.length === 0) {
+    <div class="empty-state">
+      <div class="empty-icon-wrap">
+        <mat-icon>bar_chart</mat-icon>
+      </div>
+      <h3>No Metrics Available</h3>
+      <p>Ensure <code>metrics-server</code> is installed and running in your cluster.</p>
+    </div>
+  }
+
+  <!-- Search & Count Bar -->
+  <div class="search-strip">
+    <div class="search-bar-inline">
+      <mat-icon>search</mat-icon>
+      <input type="text" [placeholder]="'Search ' + (activeTab === 'pods' ? 'pods' : 'nodes') + '...'"
+             [(ngModel)]="searchQuery" (ngModelChange)="onSearchChange()">
+      @if (searchQuery) {
+        <button mat-icon-button class="clear-btn" (click)="searchQuery = ''; onSearchChange()"><mat-icon>close</mat-icon></button>
+      }
+    </div>
+    <span class="result-count">{{ filteredMetrics.length }} of {{ currentMetrics.length }} {{ activeTab }}</span>
+  </div>
+
+  <!-- Metrics Grid -->
+  <div class="metrics-grid">
+    @for (m of paginatedMetrics; track m.name; let i = $index) {
+      <div class="metric-card" [style.animation-delay]="(i * 40) + 'ms'">
+        <div class="card-top">
+          <div class="resource-badge" [class]="activeTab">
+            <mat-icon>{{ activeTab === 'pods' ? 'hexagon' : 'dns' }}</mat-icon>
+          </div>
+          <div class="resource-info">
+            <span class="resource-name">{{ m.name }}</span>
+            @if (m.namespace) {
+              <span class="resource-ns">{{ m.namespace }}</span>
+            }
+          </div>
+          <div class="health-indicator" [class]="getHealthClass(m.cpuPercent || 0, m.memoryPercent || 0)">
+            <mat-icon>{{ getHealthIcon(m.cpuPercent || 0, m.memoryPercent || 0) }}</mat-icon>
+          </div>
+        </div>
+        <div class="card-metrics">
+          <div class="gauge-row">
+            <div class="gauge-info">
+              <span class="gauge-label">CPU</span>
+              <span class="gauge-value" [style.color]="getBarColor(m.cpuPercent || 0)">{{ m.cpu }}</span>
+            </div>
+            <div class="gauge-bar">
+              <div class="gauge-fill" [style.width.%]="m.cpuPercent || 0"
+                   [style.background]="'linear-gradient(90deg, ' + getBarColor(m.cpuPercent || 0) + ', ' + getBarColorLight(m.cpuPercent || 0) + ')'">
+              </div>
+            </div>
+            <span class="gauge-pct">{{ (m.cpuPercent || 0) | number:'1.0-0' }}%</span>
+          </div>
+          <div class="gauge-row">
+            <div class="gauge-info">
+              <span class="gauge-label">MEM</span>
+              <span class="gauge-value" [style.color]="getBarColor(m.memoryPercent || 0)">{{ m.memory }}</span>
+            </div>
+            <div class="gauge-bar">
+              <div class="gauge-fill" [style.width.%]="m.memoryPercent || 0"
+                   [style.background]="'linear-gradient(90deg, ' + getBarColor(m.memoryPercent || 0) + ', ' + getBarColorLight(m.memoryPercent || 0) + ')'">
+              </div>
+            </div>
+            <span class="gauge-pct">{{ (m.memoryPercent || 0) | number:'1.0-0' }}%</span>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Pagination -->
+  @if (totalPages > 1) {
+    <div class="pagination-bar">
+      <button mat-icon-button [disabled]="currentPage === 0" (click)="prevPage()"><mat-icon>chevron_left</mat-icon></button>
+      <span class="page-info">Page {{ currentPage + 1 }} of {{ totalPages }} <span class="page-total">({{ filteredMetrics.length }} items)</span></span>
+      <button mat-icon-button [disabled]="currentPage >= totalPages - 1" (click)="nextPage()"><mat-icon>chevron_right</mat-icon></button>
+    </div>
+  }
+</div>

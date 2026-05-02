@@ -1,0 +1,23 @@
+services:
+  backend:
+    build: ./backend
+    container_name: kubeops-backend
+    ports:
+      - "9090:9090"
+    volumes:
+      - ~/.kube:/root/.kube:ro
+      - ~/.aws:/root/.aws:ro
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://mydb.czq6yecyq39m.eu-north-1.rds.amazonaws.com:5432/postgres
+      - SPRING_DATASOURCE_USERNAME=mani
+      - SPRING_DATASOURCE_PASSWORD=9063589233
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: kubeops-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

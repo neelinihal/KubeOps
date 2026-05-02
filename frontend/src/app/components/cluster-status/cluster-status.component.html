@@ -1,0 +1,356 @@
+<div class="cluster-page">
+  <!-- Hero -->
+  <div class="page-hero">
+    <div class="hero-left">
+      <div class="hero-icon-wrap">
+        <mat-icon>cloud_circle</mat-icon>
+      </div>
+      <div>
+        <h1>Cluster Status</h1>
+        <p class="subtitle">Real-time monitoring of your EKS cluster resources</p>
+      </div>
+    </div>
+    <div class="hero-right">
+      <div class="hero-controls">
+        <button mat-icon-button matTooltip="Refresh" (click)="fetchStatus()" [disabled]="loading()" class="action-btn">
+          <mat-icon [class.spinning]="loading()">refresh</mat-icon>
+        </button>
+        <button mat-icon-button [matTooltip]="autoRefresh() ? 'Stop auto-refresh' : 'Auto-refresh'"
+                (click)="toggleAutoRefresh()" class="action-btn" [class.active]="autoRefresh()">
+          <mat-icon>{{ autoRefresh() ? 'pause_circle' : 'play_circle' }}</mat-icon>
+        </button>
+        <button class="interval-chip" [matMenuTriggerFor]="intervalMenu">
+          {{ refreshInterval() }}s
+          <mat-icon class="chip-arrow">expand_more</mat-icon>
+        </button>
+        <mat-menu #intervalMenu="matMenu" class="interval-menu">
+          @for (opt of [{v:5,l:'5s'},{v:10,l:'10s'},{v:30,l:'30s'},{v:60,l:'1m'},{v:120,l:'2m'}]; track opt.v) {
+            <button mat-menu-item (click)="onIntervalChange(opt.v)" [class.selected]="refreshInterval() === opt.v">
+              {{ opt.l }}
+            </button>
+          }
+        </mat-menu>
+        @if (autoRefresh()) {
+          <div class="live-pill">
+            <span class="live-dot"></span>
+            <span>LIVE</span>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- Namespace Selector -->
+  <div class="toolbar-strip">
+    <div class="ns-picker-wrap">
+      <div class="ns-picker" (click)="toggleNsDropdown()" [class.open]="nsDropdownOpen">
+        <mat-icon class="ns-pick-icon">folder_copy</mat-icon>
+        <span class="ns-pick-label">Namespace:</span>
+        <span class="ns-pick-value">{{ selectedNamespace() === 'all' ? 'All Namespaces' : selectedNamespace() }}</span>
+        <mat-icon class="ns-pick-arrow">expand_more</mat-icon>
+      </div>
+      @if (nsDropdownOpen) {
+        <div class="ns-pick-backdrop" (click)="closeNsDropdown()"></div>
+        <div class="ns-pick-dropdown">
+          <div class="ns-pick-item" [class.active]="selectedNamespace() === 'all'" (click)="selectNs('all')">
+            <mat-icon>layers</mat-icon>
+            <span>All Namespaces</span>
+            @if (selectedNamespace() === 'all') { <mat-icon class="ns-pick-check">check</mat-icon> }
+          </div>
+          <div class="ns-pick-divider"></div>
+          @for (ns of namespaceList; track ns) {
+            <div class="ns-pick-item" [class.active]="selectedNamespace() === ns" (click)="selectNs(ns)">
+              <mat-icon>folder</mat-icon>
+              <span>{{ ns }}</span>
+              @if (selectedNamespace() === ns) { <mat-icon class="ns-pick-check">check</mat-icon> }
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="summary-icon pods-icon"><mat-icon>view_in_ar</mat-icon></div>
+      <div class="summary-info">
+        <span class="summary-value">{{ filteredPods().length }}</span>
+        <span class="summary-label">Total Pods</span>
+      </div>
+      <div class="summary-breakdown">
+        <span class="healthy">{{ filteredHealthyPodCount }} healthy</span>
+        @if (filteredWarningPodCount > 0) {
+          <span class="warning">{{ filteredWarningPodCount }} pending</span>
+        }
+        @if (filteredErrorPodCount > 0) {
+          <span class="error">{{ filteredErrorPodCount }} failed</span>
+        }
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-icon deploy-icon"><mat-icon>rocket_launch</mat-icon></div>
+      <div class="summary-info">
+        <span class="summary-value">{{ filteredDeployments().length }}</span>
+        <span class="summary-label">Deployments</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-icon nodes-icon"><mat-icon>computer</mat-icon></div>
+      <div class="summary-info">
+        <span class="summary-value">{{ nodes().length }}</span>
+        <span class="summary-label">Nodes</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-icon ns-icon"><mat-icon>folder</mat-icon></div>
+      <div class="summary-info">
+        <span class="summary-value">{{ filteredNamespaces().length }}</span>
+        <span class="summary-label">Namespaces</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Last Updated -->
+  @if (lastUpdated()) {
+    <div class="last-updated">
+      <mat-icon>schedule</mat-icon>
+      Last updated: {{ lastUpdated() }}
+      @if (autoRefresh()) {
+        <span class="auto-badge"><span class="pulse-dot"></span> Auto-refreshing every {{ refreshInterval() }}s</span>
+      }
+    </div>
+  }
+
+  <!-- Search -->
+  <div class="filter-row">
+    <div class="search-bar">
+      <mat-icon>search</mat-icon>
+      <input type="text" placeholder="Search pods, deployments, namespaces..." [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)">
+      @if (searchQuery()) {
+        <button mat-icon-button (click)="searchQuery.set('')">
+          <mat-icon>close</mat-icon>
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- Error -->
+  @if (error()) {
+    <div class="error-banner">
+      <mat-icon>error_outline</mat-icon>
+      <span>{{ error() }}</span>
+      <button mat-stroked-button (click)="fetchStatus()">Retry</button>
+    </div>
+  }
+
+  <!-- Loading -->
+  @if (loading() && pods().length === 0) {
+    <div class="loading-state">
+      <mat-spinner diameter="40"></mat-spinner>
+      <span>Fetching cluster status...</span>
+    </div>
+  }
+
+  <!-- Pods Table -->
+  <div class="section">
+    <div class="section-header" (click)="podsCollapsed.set(!podsCollapsed())">
+      <mat-icon class="collapse-arrow" [class.collapsed]="podsCollapsed()">expand_more</mat-icon>
+      <mat-icon>view_in_ar</mat-icon>
+      <h2>Pods</h2>
+      <span class="count-badge">{{ filteredPods().length }}</span>
+      @if (loading() && pods().length > 0) {
+        <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
+      }
+      @if (!podsCollapsed()) {
+      <div class="section-search" (click)="$event.stopPropagation()">
+        <mat-icon>search</mat-icon>
+        <input type="text" placeholder="Search pods..." [ngModel]="podSearch()" (ngModelChange)="podSearch.set($event); podPage.set(0)">
+        @if (podSearch()) {
+          <button mat-icon-button class="clear-btn" (click)="podSearch.set(''); podPage.set(0)"><mat-icon>close</mat-icon></button>
+        }
+      </div>
+      }
+    </div>
+    @if (!podsCollapsed()) {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Pod Name</th>
+            <th>Namespace</th>
+            <th>Ready</th>
+            <th>Restarts</th>
+            <th>Age</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (pod of paginatedPods(); track pod.name + pod.namespace) {
+            <tr>
+              <td>
+                <span class="status-indicator" [class]="podStatusClass(pod.status)">
+                  <span class="status-dot"></span>
+                  {{ pod.status }}
+                </span>
+              </td>
+              <td class="name-cell">{{ pod.name }}</td>
+              <td><span class="ns-badge">{{ pod.namespace }}</span></td>
+              <td class="mono-cell">{{ pod.ready }}</td>
+              <td class="mono-cell" [class.restart-warn]="pod.restarts !== '0'">{{ pod.restarts }}</td>
+              <td class="age-cell">{{ pod.age }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      @if (filteredPods().length === 0 && !loading()) {
+        <div class="empty-state">
+          <mat-icon>inbox</mat-icon>
+          <span>No pods found</span>
+        </div>
+      }
+      @if (podTotalPages() > 1) {
+        <div class="pagination">
+          <button mat-icon-button [disabled]="podPage() === 0" (click)="podPage.set(podPage() - 1)"><mat-icon>chevron_left</mat-icon></button>
+          <span class="page-info">{{ podPage() + 1 }} / {{ podTotalPages() }} <span class="page-total">({{ filteredPods().length }} items)</span></span>
+          <button mat-icon-button [disabled]="podPage() >= podTotalPages() - 1" (click)="podPage.set(podPage() + 1)"><mat-icon>chevron_right</mat-icon></button>
+        </div>
+      }
+    </div>
+    }
+  </div>
+
+  <!-- Deployments Table -->
+  <div class="section">
+    <div class="section-header" (click)="depsCollapsed.set(!depsCollapsed())">
+      <mat-icon class="collapse-arrow" [class.collapsed]="depsCollapsed()">expand_more</mat-icon>
+      <mat-icon>rocket_launch</mat-icon>
+      <h2>Deployments</h2>
+      <span class="count-badge">{{ filteredDeployments().length }}</span>
+      @if (!depsCollapsed()) {
+      <div class="section-search" (click)="$event.stopPropagation()">
+        <mat-icon>search</mat-icon>
+        <input type="text" placeholder="Search deployments..." [ngModel]="depSearch()" (ngModelChange)="depSearch.set($event); depPage.set(0)">
+        @if (depSearch()) {
+          <button mat-icon-button class="clear-btn" (click)="depSearch.set(''); depPage.set(0)"><mat-icon>close</mat-icon></button>
+        }
+      </div>
+      }
+    </div>
+    @if (!depsCollapsed()) {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Namespace</th>
+            <th>Ready</th>
+            <th>Up-to-Date</th>
+            <th>Available</th>
+            <th>Age</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (dep of paginatedDeployments(); track dep.name + dep.namespace) {
+            <tr>
+              <td class="name-cell">{{ dep.name }}</td>
+              <td><span class="ns-badge">{{ dep.namespace }}</span></td>
+              <td class="mono-cell">{{ dep.ready }}</td>
+              <td class="mono-cell">{{ dep.upToDate }}</td>
+              <td class="mono-cell">{{ dep.available }}</td>
+              <td class="age-cell">{{ dep.age }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      @if (depTotalPages() > 1) {
+        <div class="pagination">
+          <button mat-icon-button [disabled]="depPage() === 0" (click)="depPage.set(depPage() - 1)"><mat-icon>chevron_left</mat-icon></button>
+          <span class="page-info">{{ depPage() + 1 }} / {{ depTotalPages() }} <span class="page-total">({{ filteredDeployments().length }} items)</span></span>
+          <button mat-icon-button [disabled]="depPage() >= depTotalPages() - 1" (click)="depPage.set(depPage() + 1)"><mat-icon>chevron_right</mat-icon></button>
+        </div>
+      }
+    </div>
+    }
+  </div>
+
+  <!-- Nodes Table -->
+  <div class="section">
+    <div class="section-header" (click)="nodesCollapsed.set(!nodesCollapsed())">
+      <mat-icon class="collapse-arrow" [class.collapsed]="nodesCollapsed()">expand_more</mat-icon>
+      <mat-icon>computer</mat-icon>
+      <h2>Nodes</h2>
+      <span class="count-badge">{{ filteredNodes().length }}</span>
+      @if (!nodesCollapsed()) {
+      <div class="section-search" (click)="$event.stopPropagation()">
+        <mat-icon>search</mat-icon>
+        <input type="text" placeholder="Search nodes..." [ngModel]="nodeSearch()" (ngModelChange)="nodeSearch.set($event); nodePage.set(0)">
+        @if (nodeSearch()) {
+          <button mat-icon-button class="clear-btn" (click)="nodeSearch.set(''); nodePage.set(0)"><mat-icon>close</mat-icon></button>
+        }
+      </div>
+      }
+    </div>
+    @if (!nodesCollapsed()) {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Node Name</th>
+            <th>Roles</th>
+            <th>Age</th>
+            <th>Version</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (node of paginatedNodes(); track node.name) {
+            <tr>
+              <td>
+                <span class="status-indicator" [class]="nodeStatusClass(node.status)">
+                  <span class="status-dot"></span>
+                  {{ node.status }}
+                </span>
+              </td>
+              <td class="name-cell">{{ node.name }}</td>
+              <td>{{ node.roles }}</td>
+              <td class="age-cell">{{ node.age }}</td>
+              <td class="mono-cell">{{ node.version }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      @if (nodeTotalPages() > 1) {
+        <div class="pagination">
+          <button mat-icon-button [disabled]="nodePage() === 0" (click)="nodePage.set(nodePage() - 1)"><mat-icon>chevron_left</mat-icon></button>
+          <span class="page-info">{{ nodePage() + 1 }} / {{ nodeTotalPages() }} <span class="page-total">({{ filteredNodes().length }} items)</span></span>
+          <button mat-icon-button [disabled]="nodePage() >= nodeTotalPages() - 1" (click)="nodePage.set(nodePage() + 1)"><mat-icon>chevron_right</mat-icon></button>
+        </div>
+      }
+    </div>
+    }
+  </div>
+
+  <!-- Namespaces -->
+  <div class="section">
+    <div class="section-header" (click)="nsCollapsed.set(!nsCollapsed())">
+      <mat-icon class="collapse-arrow" [class.collapsed]="nsCollapsed()">expand_more</mat-icon>
+      <mat-icon>folder</mat-icon>
+      <h2>Namespaces</h2>
+      <span class="count-badge">{{ filteredNamespaces().length }}</span>
+    </div>
+    @if (!nsCollapsed()) {
+    <div class="ns-grid">
+      @for (ns of filteredNamespaces(); track ns.name) {
+        <div class="ns-card">
+          <div class="ns-card-status" [class]="ns.status === 'Active' ? 'healthy' : 'error'">
+            <span class="status-dot"></span>
+          </div>
+          <span class="ns-card-name">{{ ns.name }}</span>
+          <span class="ns-card-age">{{ ns.age }}</span>
+        </div>
+      }
+    </div>
+    }
+  </div>
+</div>

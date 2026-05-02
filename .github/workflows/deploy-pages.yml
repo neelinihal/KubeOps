@@ -38,12 +38,12 @@ jobs:
         run: npm run build -- --configuration production --base-href /KubeOps/
 
       - name: Copy index.html as 404.html for SPA routing
-        run: cp frontend/dist/frontend/index.html frontend/dist/frontend/404.html
+        run: cp frontend/dist/frontend/browser/index.html frontend/dist/frontend/browser/404.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: frontend/dist/frontend
+          path: frontend/dist/frontend/browser
 
   deploy:
     needs: build
